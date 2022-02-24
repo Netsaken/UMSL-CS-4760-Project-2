@@ -1,43 +1,121 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
+#include <sys/shm.h>
 
-const int n = 5;
-
-bool choosing[n];
-int number[n];
+#include "config.h"
 
 int main(int argc, char *argv[]) {
-    for (int i = 0; i < 5; i++) {
-        // execute code to enter critical section;
-        // sleep for random amount of time (between 0 and 5 seconds);
-        // critical_section();
-        // sleep for random amount of time (between 0 and 5 seconds);
-        // execute code to exit from critical section;
+    key_t keyInt = ftok("./README.txt", 'g');
+    key_t keyBool = ftok("./README.txt", 's');
+
+    int *number;
+    bool *choosing;
+
+    int i = atoi(argv[0]);
+    int higher = 0;
+
+    //Construct format for "perror"
+    char* title = argv[0];
+    char report[20] = ": shm";
+    char* message;
+
+    //Get shared memory
+    int shmid_int = shmget(keyInt, sizeof(number), IPC_CREAT | 0666);
+    if (shmid_int == -1) {
+        strcpy(report, ": shmget1");
+        message = strcat(title, report);
+        perror(message);
+        return 1;
     }
 
-    printf("This is slave, reporting!\n");
+    int shmid_bool = shmget(keyBool, sizeof(choosing), IPC_CREAT | 0666);
+    if (shmid_bool == -1) {
+        strcpy(report, ": shmget2");
+        message = strcat(title, report);
+        perror(message);
+        return 1;
+    }
 
-    return 0;
-}
+    //Attach shared memory
+    number = shmat(shmid_int, NULL, 0);
+    if (number == (void *) -1) {
+        strcpy(report, ": shmat1");
+        message = strcat(title, report);
+        perror(message);
+        return 1;
+    }
 
-void process_i(const int i) /* ith Process */
-{
+    choosing = shmat(shmid_bool, NULL, 0);
+    if (choosing == (void *) -1) {
+        strcpy(report, ": shmat2");
+        message = strcat(title, report);
+        perror(message);
+        return 1;
+    }
+
+    //Conduct Bakery Algorithm
     do {
         choosing[i] = true;
-        //number[i] = 1 + max(number[0], ..., number[n - 1]);
+
+        for (int k = 0; k < 20; k++) {
+            if (higher < number[k]) {
+                higher = number[k];
+            }
+        }
+        printf("higher is: %i\n", higher);
+        number[i] = 1 + higher;
+        printf("number is: %i\n", number[i]);
+        
         choosing[i] = false;
-        for (int j = 0; j < n; j++) {
+
+        //TEST
+        for (int x = 0; x < 20; x++) {
+            printf("%i ", number[x]);
+        }
+        printf("\n");
+        for (int x = 0; x < 20; x++) {
+            printf("%i ", choosing[x]);
+        }
+        printf("\n");
+
+        for (int j = 0; j < MAX_PROC; j++) {
             while (choosing[j]) {
-                ; // Wait if j happens to be choosing
+               ; // WAIT if j happens to be choosing
             }
             while ( (number[j] != 0) 
             && (number[j] < number[i] || (number[j] == number[i] && j < i)) ) {
-                ;
+               ;
             }
         }
-        //critical_section();
+        //sleep for random amount of time (between 0 and 5 seconds)
 
+        //critical_section();
+        //Test
+        printf("This is slave %s, reporting!\n", argv[0]);
+
+        //sleep for random amount of time (between 0 and 5 seconds)
+        //EXIT critical section
         number[i] = 0;
-        //remainder_section();
+
+        // Detach shared memory
+        if (shmdt(number) == -1) {
+            strcpy(report, ": shmdt1");
+            message = strcat(title, report);
+            perror(message);
+            return 1;
+        }
+
+        if (shmdt(choosing) == -1) {
+            strcpy(report, ": shmdt2");
+            message = strcat(title, report);
+            perror(message);
+            return 1;
+        }
+
+        
     } while (1);
+
+    return 0;
 }

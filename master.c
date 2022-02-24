@@ -5,20 +5,27 @@
 #include <unistd.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/wait.h>
+
+#include "config.h"
 
 int main(int argc, char *argv[])
 {
-    int option;
+    pid_t childPid;
+    key_t keyInt = ftok("./README.txt", 'g');
+    key_t keyBool = ftok("./README.txt", 's');
+    char iNum[3];
+
+    int option, status;
     int s = 100;
     int n = 2;
-    int max_n = 20;
 
     int *sharedInts;
     bool *sharedBools;
 
     //Construct format for "perror"
     char* title = argv[0];
-    char report[10] = ": shm";
+    char report[20] = ": shm";
     char* message;
 
     //Command line option
@@ -42,10 +49,10 @@ int main(int argc, char *argv[])
         n = atoi(argv[optind]);
 
         //Check for invalid entries
-        if (n > max_n) {
-            printf("Sorry, the maximum allowed processes for this program is %i.\n", max_n);
-            printf("Number of processes has been set to %i...\n\n", max_n);
-            n = max_n;
+        if (n > MAX_PROC) {
+            printf("Sorry, the maximum allowed processes for this program is %i.\n", MAX_PROC);
+            printf("Number of processes has been set to %i...\n\n", MAX_PROC);
+            n = MAX_PROC;
         } else if (n < 1) {
             printf("There was an error with your input. Please only use numbers.\n");
             printf("Number of processes has been set to 1...\n\n");
@@ -53,18 +60,18 @@ int main(int argc, char *argv[])
         }
     }
 
-    //Initialize shared memory
-    int shmid_int = shmget(IPC_PRIVATE, n*sizeof(int), IPC_CREAT | 0666);
+    //Get shared memory
+    int shmid_int = shmget(keyInt, sizeof(sharedInts), IPC_CREAT | 0666);
     if (shmid_int == -1) {
-        strcpy(report, ": shmget");
+        strcpy(report, ": shmget1");
         message = strcat(title, report);
         perror(message);
         return 1;
     }
 
-    int shmid_bool = shmget(IPC_PRIVATE, n*sizeof(bool), IPC_CREAT | 0666);
+    int shmid_bool = shmget(keyBool, sizeof(sharedBools), IPC_CREAT | 0666);
     if (shmid_bool == -1) {
-        strcpy(report, ": shmget");
+        strcpy(report, ": shmget2");
         message = strcat(title, report);
         perror(message);
         return 1;
@@ -73,7 +80,7 @@ int main(int argc, char *argv[])
     //Attach shared memory
     sharedInts = shmat(shmid_int, NULL, 0);
     if (sharedInts == (void *) -1) {
-        strcpy(report, ": shmat");
+        strcpy(report, ": shmat1");
         message = strcat(title, report);
         perror(message);
         return 1;
@@ -81,22 +88,55 @@ int main(int argc, char *argv[])
 
     sharedBools = shmat(shmid_bool, NULL, 0);
     if (sharedBools == (void *) -1) {
-        strcpy(report, ": shmat");
+        strcpy(report, ": shmat2");
         message = strcat(title, report);
         perror(message);
         return 1;
     }
 
+    //Reset arrays
+    for (int x = 0; x < 20; x++) {
+        sharedInts[x] = 0;
+    }
+    for (int x = 0; x < 20; x++) {
+        sharedBools[x] = 0;
+    }
+
+    //Fork and Exec slave programs
+    printf("This is master, reporting!\n");
+
+    for (int i = 0; i < n; i++) {
+        childPid = fork();
+        if (childPid == -1) {
+            strcpy(report, ": childPid");
+            message = strcat(title, report);
+            perror(message);
+            return 1;
+        }
+
+        if (childPid == 0) {
+            sprintf(iNum, "%i", i);
+            execl("./slave", iNum, NULL);
+        } else do {
+            if ((childPid = waitpid(childPid, &status, WNOHANG)) == -1) {
+                strcpy(report, ": waitPid");
+                message = strcat(title, report);
+                perror(message);
+                return 1;
+            }
+        } while (childPid == 0);
+    }
+
     //Detach shared memory
     if (shmdt(sharedInts) == -1) {
-        strcpy(report, ": shmdt");
+        strcpy(report, ": shmdt1");
         message = strcat(title, report);
         perror(message);
         return 1;
     }
 
     if (shmdt(sharedBools) == -1) {
-        strcpy(report, ": shmdt");
+        strcpy(report, ": shmdt2");
         message = strcat(title, report);
         perror(message);
         return 1;
@@ -104,22 +144,18 @@ int main(int argc, char *argv[])
 
     //Remove shared memory
     if (shmctl(shmid_int, IPC_RMID, 0) == -1) {
-        strcpy(report, ": shmctl");
+        strcpy(report, ": shmctl1");
         message = strcat(title, report);
         perror(message);
         return 1;
     }
 
     if (shmctl(shmid_bool, IPC_RMID, 0) == -1) {
-        strcpy(report, ": shmctl");
+        strcpy(report, ": shmctl2");
         message = strcat(title, report);
         perror(message);
         return 1;
     }
-
-    //Do stuff...
-    printf("This is master, reporting!\n");
-    printf("S is %i, N is %i\n", s, n);
 
     return 0;
 }
