@@ -1,5 +1,5 @@
-CC = g++
-CFLAGS = -g -Wshadow -std=c++11
+CC = gcc
+CFLAGS = -g -Wshadow
 
 all: master slave
 
