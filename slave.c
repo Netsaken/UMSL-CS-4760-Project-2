@@ -3,10 +3,13 @@
 #include <stdbool.h>
 #include <string.h>
 #include <sys/shm.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "config.h"
 
 int main(int argc, char *argv[]) {
+    FILE *file;
     key_t keyInt = ftok("./README.txt", 'g');
     key_t keyBool = ftok("./README.txt", 's');
 
@@ -15,6 +18,7 @@ int main(int argc, char *argv[]) {
 
     int i = atoi(argv[0]);
     int higher = 0;
+    char onlyTime[9];
 
     //Construct format for "perror"
     char* title = argv[0];
@@ -57,6 +61,7 @@ int main(int argc, char *argv[]) {
 
     //Conduct Bakery Algorithm
     do {
+        //Queue up
         choosing[i] = true;
 
         for (int k = 0; k < 20; k++) {
@@ -64,21 +69,9 @@ int main(int argc, char *argv[]) {
                 higher = number[k];
             }
         }
-        printf("higher is: %i\n", higher);
         number[i] = 1 + higher;
-        printf("number is: %i\n", number[i]);
         
         choosing[i] = false;
-
-        //TEST
-        for (int x = 0; x < 20; x++) {
-            printf("%i ", number[x]);
-        }
-        printf("\n");
-        for (int x = 0; x < 20; x++) {
-            printf("%i ", choosing[x]);
-        }
-        printf("\n");
 
         for (int j = 0; j < MAX_PROC; j++) {
             while (choosing[j]) {
@@ -89,14 +82,23 @@ int main(int argc, char *argv[]) {
                ;
             }
         }
+
         //sleep for random amount of time (between 0 and 5 seconds)
+        sleep(rand() % 5);
 
         //critical_section();
-        //Test
-        printf("This is slave %s, reporting!\n", argv[0]);
+        time_t currentTime;
+        time(&currentTime);
+        strncpy(onlyTime, ctime(&currentTime)+11, 8);
+
+        file = fopen("./cstest", "a");
+        fprintf(file, "%s Queue %i File modified by process number %i\n", onlyTime, number[i], i);
+        fclose(file);
 
         //sleep for random amount of time (between 0 and 5 seconds)
-        //EXIT critical section
+        sleep(rand() % 5);
+
+        //Set queue number to 0 and exit critical section
         number[i] = 0;
 
         // Detach shared memory
@@ -113,8 +115,6 @@ int main(int argc, char *argv[]) {
             perror(message);
             return 1;
         }
-
-        
     } while (1);
 
     return 0;

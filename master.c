@@ -117,7 +117,8 @@ int main(int argc, char *argv[])
         if (childPid == 0) {
             sprintf(iNum, "%i", i);
             execl("./slave", iNum, NULL);
-        } else do {
+        } 
+        else do {
             if ((childPid = waitpid(childPid, &status, WNOHANG)) == -1) {
                 strcpy(report, ": waitPid");
                 message = strcat(title, report);
