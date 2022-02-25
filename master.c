@@ -13,14 +13,52 @@
 
 #include "config.h"
 
+FILE *file;
 pid_t childPid;
 
+int *sharedInts;
+bool *sharedBools;
+
+int shmid_int;
+int shmid_bool;
+
 static void handle_sig(int sig) {
-    char aster = '*';
-    int errsave;
+    int errsave, status;
     errsave = errno;
-    printf("Stop printing alarm clock: %c\n", aster);
+    //Print message
+    printf("Program interrupted or time exceeded. Shutting down...\n");
+
+    //End children
+    kill(childPid, SIGTERM);
+    waitpid(childPid, &status, 0);
+
+    //Detach shared memory
+    if (shmdt(sharedInts) == -1) {
+        perror("./master: sigShmdt1");
+        exit(1);
+    }
+
+    if (shmdt(sharedBools) == -1) {
+        perror("./master: sigShmdt2");
+        exit(1);
+    }
+
+    //Remove shared memory
+    if (shmctl(shmid_int, IPC_RMID, 0) == -1) {
+        perror("./master: sigShmctl1");
+        exit(1);
+    }
+
+    if (shmctl(shmid_bool, IPC_RMID, 0) == -1) {
+        perror("./master: sigShmctl2");
+        exit(1);
+    }
+
+    printf("Cleanup complete. Have a nice day!\n");
+
+    //Exit program
     errno = errsave;
+    exit(0);
 }
 
 static int setupinterrupt(void) {
@@ -49,9 +87,6 @@ int main(int argc, char *argv[])
     int option, status;
     int s = 100;
     int n = 2;
-
-    int *sharedInts;
-    bool *sharedBools;
 
     //Construct format for "perror"
     char* title = argv[0];
@@ -91,6 +126,13 @@ int main(int argc, char *argv[])
     }
 
     //SET TIMER
+    if (setupinterrupt() == -1) {
+        strcpy(report, ": setupinterrupt");
+        message = strcat(title, report);
+        perror(message);
+        return 1;
+    }
+
     if (setupitimer(s) == -1) {
         strcpy(report, ": setitimer");
         message = strcat(title, report);
@@ -99,7 +141,7 @@ int main(int argc, char *argv[])
     }
 
     //Get shared memory
-    int shmid_int = shmget(keyInt, sizeof(sharedInts), IPC_CREAT | 0666);
+    shmid_int = shmget(keyInt, sizeof(sharedInts), IPC_CREAT | 0666);
     if (shmid_int == -1) {
         strcpy(report, ": shmget1");
         message = strcat(title, report);
@@ -107,7 +149,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    int shmid_bool = shmget(keyBool, sizeof(sharedBools), IPC_CREAT | 0666);
+    shmid_bool = shmget(keyBool, sizeof(sharedBools), IPC_CREAT | 0666);
     if (shmid_bool == -1) {
         strcpy(report, ": shmget2");
         message = strcat(title, report);
@@ -152,6 +194,7 @@ int main(int argc, char *argv[])
             return 1;
         }
 
+        //Wait for child to finish
         if (childPid == 0) {
             sprintf(iNum, "%i", i);
             execl("./slave", iNum, NULL);

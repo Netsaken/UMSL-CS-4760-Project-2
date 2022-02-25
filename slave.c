@@ -10,6 +10,7 @@
 
 int main(int argc, char *argv[]) {
     FILE *file;
+    char* logFile;
     key_t keyInt = ftok("./README.txt", 'g');
     key_t keyBool = ftok("./README.txt", 's');
 
@@ -91,12 +92,29 @@ int main(int argc, char *argv[]) {
         time(&currentTime);
         strncpy(onlyTime, ctime(&currentTime)+11, 8);
 
+        //Make logfile
+        sprintf(logFile, "./logfile.%i", i);
+
+        //Log entry time
+        file = fopen(logFile, "a");
+        fprintf(file, "Entered critical section at %s\n", onlyTime);
+        fclose(file);
+
+        //Print to cstest
         file = fopen("./cstest", "a");
         fprintf(file, "%s Queue %i File modified by process number %i\n", onlyTime, number[i], i);
         fclose(file);
 
         //sleep for random amount of time (between 0 and 5 seconds)
         sleep(rand() % 5);
+
+        time(&currentTime);
+        strncpy(onlyTime, ctime(&currentTime)+11, 8);
+
+        //Log exit time
+        file = fopen(logFile, "a");
+        fprintf(file, "Left critical section at %s\n", onlyTime);
+        fclose(file);  
 
         //Set queue number to 0 and exit critical section
         number[i] = 0;
