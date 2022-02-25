@@ -10,7 +10,7 @@
 
 int main(int argc, char *argv[]) {
     FILE *file;
-    char* logFile;
+    char logFile[15] = "./logfile.";
     key_t keyInt = ftok("./README.txt", 'g');
     key_t keyBool = ftok("./README.txt", 's');
 
@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
 
     int i = atoi(argv[0]);
     int higher = 0;
-    char onlyTime[9];
+    char onlyTime[10];
 
     //Construct format for "perror"
     char* title = argv[0];
@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
         strncpy(onlyTime, ctime(&currentTime)+11, 8);
 
         //Make logfile
-        sprintf(logFile, "./logfile.%i", i);
+        strcat(logFile, argv[0]);
 
         //Log entry time
         file = fopen(logFile, "a");

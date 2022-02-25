@@ -183,8 +183,6 @@ int main(int argc, char *argv[])
     }
 
     //Fork and Exec slave programs
-    printf("This is master, reporting!\n");
-
     for (int i = 0; i < n; i++) {
         childPid = fork();
         if (childPid == -1) {
