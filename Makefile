@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -g -Wshadow
+CFLAGS = -g -Wshadow -std=gnu99
 
 all: master slave
 

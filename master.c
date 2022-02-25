@@ -1,3 +1,5 @@
+#include <errno.h>
+#include <features.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -5,13 +7,41 @@
 #include <unistd.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/time.h>
 #include <sys/wait.h>
+#include <signal.h>
 
 #include "config.h"
 
+pid_t childPid;
+
+static void handle_sig(int sig) {
+    char aster = '*';
+    int errsave;
+    errsave = errno;
+    printf("Stop printing alarm clock: %c\n", aster);
+    errno = errsave;
+}
+
+static int setupinterrupt(void) {
+    struct sigaction act;
+    act.sa_handler = handle_sig;
+    act.sa_flags = 0;
+    return (sigemptyset(&act.sa_mask) || sigaction(SIGALRM, &act, NULL));
+}
+
+static int setupitimer(int inputTime) {
+    struct itimerval value;
+    value.it_interval.tv_sec = inputTime;
+    value.it_interval.tv_usec = 0;
+    value.it_value = value.it_interval;
+    return (setitimer(ITIMER_REAL, &value, NULL));
+}
+
 int main(int argc, char *argv[])
 {
-    pid_t childPid;
+    signal(SIGINT, handle_sig);
+
     key_t keyInt = ftok("./README.txt", 'g');
     key_t keyBool = ftok("./README.txt", 's');
     char iNum[3];
@@ -58,6 +88,14 @@ int main(int argc, char *argv[])
             printf("Number of processes has been set to 1...\n\n");
             n = 1;
         }
+    }
+
+    //SET TIMER
+    if (setupitimer(s) == -1) {
+        strcpy(report, ": setitimer");
+        message = strcat(title, report);
+        perror(message);
+        return 1;
     }
 
     //Get shared memory
